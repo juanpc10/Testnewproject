@@ -1,36 +1,37 @@
 \m4_TLV_version 1d: tl-x.org
 \SV
-   `include "sqrt32.v";
-   
+
+   // ===========
+   // Incrementer
+   // ===========
+
+   // An incrementer implemented bit-level using hierarchy for the bit slice.
+   // Testbench compares with result of + operator.
+
    m4_makerchip_module
 \TLV
+   m4_define(M4_WIDTH, 8)
    
-   // Stimulus
-   |calc
-      @0
-         $valid = & $rand_valid[1:0];  // Valid with 1/4 probability
-                                       // (& over two random bits).
+   // The incrementer
+   /slice[M4_WIDTH-1:0]
+      // Get carry in from previous slice (or 1 into slice 0).
+      $carry_in = (#slice == 0) ? 1'b1
+                                : /slice[(#slice - 1) % M4_WIDTH]$carry_out;
+!     $Value <= *reset ? 1'b0    // reset to zero
+                       : $Value ^ $carry_in;
+      $carry_out = $Value && $carry_in;
    
-   // DUT (Design Under Test)
-   |calc
-      ?$valid
-         @1
-            $aa_sq[7:0] = $aa[3:0] ** 2;
-            $bb_sq[7:0] = $bb[3:0] ** 2;
-         @2
-            $cc_sq[8:0] = $aa_sq + $bb_sq;
-         @3
-            $cc[4:0] = sqrt($cc_sq);
-
-
-   // Print
-   |calc
-      @3
-         \SV_plus
-            always_ff @(posedge clk) begin
-               if ($valid)
-                  \$display("sqrt((\%2d ^ 2) + (\%2d ^ 2)) = \%2d", $aa, $bb, $cc);
-            end
-
+   // Combine output bits into a vector.
+   $value[M4_WIDTH-1:0] = /slice[*]$Value;
+   
+   
+   // Testbench
+   /tb
+!     $Value[M4_WIDTH-1:0] <= *reset ? M4_WIDTH'b0 : $Value + M4_WIDTH'b1;
+      $error = /top$value != $Value;
+   
+      // End simulation
+!     *failed = ! *reset && $error;
+!     *passed = $Value == M4_WIDTH'd30 && *cyc_cnt >= 32'd30;
 \SV
    endmodule
